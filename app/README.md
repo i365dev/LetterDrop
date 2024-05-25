@@ -28,7 +28,6 @@ erDiagram
         string title
         string description 
         string logo
-        int subscriberCount
         bool subscribable
         datetime createdAt
         datetime updatedAt
@@ -36,6 +35,7 @@ erDiagram
 
     Subscriber {
         string email PK
+        string newsletter_id PK
         bool isSubscribed
         datetime upsertedAt
     }
