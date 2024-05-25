@@ -1,0 +1,132 @@
+swagger: '2.0'
+info:
+  title: Newsletter API
+  description: API for managing newsletters
+  version: 1.0.0
+
+paths:
+  /api/newsletter:
+    post:
+      summary: Create a new newsletter
+      description: Create a new newsletter
+      security:
+        - ZeroTrustAuth: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/CreateNewsletterRequest'
+      responses:
+        '201':
+          description: Newsletter created successfully
+          schema:
+            $ref: '#/definitions/Newsletter'
+
+  /api/newsletter/{newsletterId}/offline:
+    put:
+      summary: Take a newsletter offline
+      description: Mark a newsletter as offline and unsubscribable
+      security:
+        - ZeroTrustAuth: []
+      parameters:
+        - name: newsletterId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200':
+          description: Newsletter taken offline successfully
+
+  /api/subscribe/confirm:
+    post:
+      summary: Confirm subscription
+      description: Send a confirmation subscription link with a temporary token to the user's email
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/SubscribeConfirmRequest'
+      responses:
+        '200':
+          description: Confirmation link sent successfully
+
+  /api/subscribe/cancel:
+    post:
+      summary: Cancel subscription
+      description: Send an unsubscribe link with a temporary token to the user's email
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/SubscribeCancelRequest'
+      responses:
+        '200':
+          description: Unsubscribe link sent successfully
+
+  /newsletter/{newsletterId}:
+    get:
+      summary: Get newsletter details
+      description: View newsletter details and subscribe/unsubscribe
+      parameters:
+        - name: newsletterId
+          in: path
+          required: true
+          type: string
+      responses:
+        '200':
+          description: Newsletter details retrieved successfully
+          schema:
+            $ref: '#/definitions/Newsletter'
+
+definitions:
+  CreateNewsletterRequest:
+    type: object
+    properties:
+      title:
+        type: string
+      description:
+        type: string
+      logo:
+        type: string
+
+  SubscribeConfirmRequest:
+    type: object
+    properties:
+      email:
+        type: string
+      token:
+        type: string
+
+  SubscribeCancelRequest:
+    type: object
+    properties:
+      email:
+        type: string
+      token:
+        type: string
+
+  Newsletter:
+    type: object
+    properties:
+      id:
+        type: string
+        format: uuid
+      title:
+        type: string
+      description:
+        type: string
+      logo:
+        type: string
+      subscriberCount:
+        type: integer
+      subscribable:
+        type: boolean
+
+securityDefinitions:
+  ZeroTrustAuth:
+    type: apiKey
+    in: header
+    name: Authorization
