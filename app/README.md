@@ -13,6 +13,10 @@ npm run deploy
 
 ## Architecture
 
+### API Schema
+
+[swagger](./api.swagger.yml)
+
 ### Database Schema
 
 ```mermaid
