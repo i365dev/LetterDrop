@@ -1,5 +1,4 @@
 import { Hono } from 'hono'
-import { uuid as uuidv4 } from 'uuidv4'
 
 type Bindings = {
   DB: D1Database
@@ -12,7 +11,9 @@ const app = new Hono<{ Bindings: Bindings }>()
 // Private Routes for managing Newsletters
 app.post('/api/newsletter', async (c) => {
   const { title, description, logo } = await c.req.json<{ title: string, description: string, logo: string }>()
-  const id = uuidv4()
+
+  const id = crypto.randomUUID()
+
   const createdAt = new Date().toISOString()
   const updatedAt = createdAt
 
@@ -78,7 +79,7 @@ app.get('/api/subscribe/cancel/:token', async (c) => {
 
 app.post('/api/subscribe/send-confirmation', async (c) => {
   const { email, newsletterId } = await c.req.json<{ email: string, newsletterId: string }>()
-  const token = uuidv4()
+  const token = crypto.randomUUID()
   const expiry = 5 * 60 * 1000 // 5 minutes
 
   // Store Token
@@ -101,7 +102,7 @@ app.post('/api/subscribe/send-confirmation', async (c) => {
 
 app.post('/api/subscribe/send-cancellation', async (c) => {
   const { email, newsletterId } = await c.req.json<{ email: string, newsletterId: string }>()
-  const token = uuidv4()
+  const token = crypto.randomUUID()
   const expiry = 5 * 60 * 1000 // 5 minutes
 
   // Store Token
