@@ -4630,3 +4630,424 @@ securityDefinitions:
 
 > You
 
+POST https://ld.i365.tech/api/newsletter - Ok @ 6/1/2024, 11:23:25 AM
+  (error) RangeError: Maximum call stack size exceeded
+
+这个错误是怎么回事？
+
+> ChatGPT
+
+“RangeError: Maximum call stack size exceeded” 通常是由于无限递归调用或函数调用堆栈太深引起的。这可能是代码中的某个地方存在递归调用或某个函数被反复调用而没有退出。
+
+为了找出问题的根源，我们需要检查相关的代码，尤其是那些涉及数据库操作和 JSON 处理的部分。
+
+### 可能的原因
+
+1. **数据库操作中的循环调用**：检查是否有任何数据库操作在递归地调用自身。
+2. **JSON 处理中的循环引用**：确保 JSON 对象中没有循环引用，可能导致 JSON.stringify 或 JSON.parse 失败。
+3. **Hono 框架中的中间件或路由设置**：确保没有意外的递归调用。
+
+### 解决方法
+
+#### 1. 检查数据库操作
+
+确保你的数据库操作没有递归调用。例如：
+
+```typescript
+app.post('/api/newsletter', async (c) => {
+  const { title, description, logo } = await c.req.json<{ title: string, description: string, logo: string }>()
+  const id = uuidv4()
+  const createdAt = new Date().toISOString()
+  const updatedAt = createdAt
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO Newsletter (id, title, description, logo, subscribable, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, title, description, logo, true, createdAt, updatedAt).run()
+    
+    return c.json({ id, title, description, logo, subscribable: true, createdAt, updatedAt }, 201)
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+```
+
+#### 2. 检查 JSON 处理
+
+确保 JSON 对象中没有循环引用。例如：
+
+```typescript
+app.post('/api/newsletter', async (c) => {
+  const { title, description, logo } = await c.req.json<{ title: string, description: string, logo: string }>()
+  const id = uuidv4()
+  const createdAt = new Date().toISOString()
+  const updatedAt = createdAt
+
+  try {
+    const stmt = c.env.DB.prepare(
+      `INSERT INTO Newsletter (id, title, description, logo, subscribable, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    await stmt.bind(id, title, description, logo, true, createdAt, updatedAt).run()
+    
+    return c.json({ id, title, description, logo, subscribable: true, createdAt, updatedAt }, 201)
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+```
+
+#### 3. 检查 Hono 框架中的中间件或路由设置
+
+确保你的中间件和路由没有意外的递归调用。例如：
+
+```typescript
+import { Hono } from 'hono'
+import { v4 as uuidv4 } from 'uuid'
+
+type Bindings = {
+  DB: D1Database
+  EMAIL_SERVICE_URL: string
+  KV: KVNamespace
+}
+
+const app = new Hono<{ Bindings: Bindings }>()
+
+// Private Routes for managing Newsletters
+app.post('/api/newsletter', async (c) => {
+  const { title, description, logo } = await c.req.json<{ title: string, description: string, logo: string }>()
+  const id = uuidv4()
+  const createdAt = new Date().toISOString()
+  const updatedAt = createdAt
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO Newsletter (id, title, description, logo, subscribable, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, title, description, logo, true, createdAt, updatedAt).run()
+    
+    return c.json({ id, title, description, logo, subscribable: true, createdAt, updatedAt }, 201)
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+app.put('/api/newsletter/:newsletterId/offline', async (c) => {
+  const { newsletterId } = c.req.param()
+
+  try {
+    await c.env.DB.prepare(
+      `UPDATE Newsletter SET subscribable = ? WHERE id = ?`
+    ).bind(false, newsletterId).run()
+    
+    return c.json({ message: 'Newsletter taken offline successfully' })
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+// Public Routes for managing Subscriptions
+app.post('/api/subscribe/confirm', async (c) => {
+  const { email, token } = await c.req.json<{ email: string, token: string }>()
+  
+  // Validate Token
+  const storedToken = await c.env.KV.get(token)
+  if (!storedToken) {
+    return c.json({ error: 'Invalid or expired token' }, 400)
+  }
+
+  // Update Subscription Status
+  await c.env.DB.prepare(
+    `UPDATE Subscriber SET isSubscribed = ? WHERE email = ?`
+  ).bind(true, email).run()
+
+  return c.json({ message: 'Subscription confirmed successfully' })
+})
+
+app.post('/api/subscribe/cancel', async (c) => {
+  const { email, token } = await c.req.json<{ email: string, token: string }>()
+
+  // Validate Token
+  const storedToken = await c.env.KV.get(token)
+  if (!storedToken) {
+    return c.json({ error: 'Invalid or expired token' }, 400)
+  }
+
+  // Update Subscription Status
+  await c.env.DB.prepare(
+    `UPDATE Subscriber SET isSubscribed = ? WHERE email = ?`
+  ).bind(false, email).run()
+
+  return c.json({ message: 'Unsubscribed successfully' })
+})
+
+app.post('/api/subscribe/send-confirmation', async (c) => {
+  const { email, newsletterId } = await c.req.json<{ email: string, newsletterId: string }>()
+  const token = uuidv4()
+  const expiry = 5 * 60 * 1000 // 5 minutes
+
+  // Store Token
+  await c.env.KV.put(token, email, { expirationTtl: expiry })
+
+  // Send Confirmation Email
+  const confirmationUrl = `https://your-domain.com/api/subscribe/confirm?token=${token}&email=${email}`
+  await fetch(c.env.EMAIL_SERVICE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      to: email,
+      subject: 'Confirm your subscription',
+      body: `Please confirm your subscription by clicking the following link: ${confirmationUrl}`
+    })
+  })
+
+  return c.json({ message: 'Confirmation email sent' })
+})
+
+app.post('/api/subscribe/send-cancellation', async (c) => {
+  const { email, newsletterId } = await c.req.json<{ email: string, newsletterId: string }>()
+  const token = uuidv4()
+  const expiry = 5 * 60 * 1000 // 5 minutes
+
+  // Store Token
+  await c.env.KV.put(token, email, { expirationTtl: expiry })
+
+  // Send Cancellation Email
+  const cancellationUrl = `https://your-domain.com/api/subscribe/cancel?token=${token}&email=${email}`
+  await fetch(c.env.EMAIL_SERVICE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      to: email,
+      subject: 'Cancel your subscription',
+      body: `Please cancel your subscription by clicking the following link: ${cancellationUrl}`
+    })
+  })
+
+  return c.json({ message: 'Cancellation email sent' })
+})
+
+// Public Page for viewing Newsletters
+app.get('/newsletter/:newsletterId', async (c) => {
+  const { newsletterId } = c.req.param()
+
+  try {
+    const newsletter = await c.env.DB.prepare(
+      `SELECT * FROM Newsletter WHERE id = ?`
+    ).bind(newsletterId).first()
+
+    if (!newsletter) {
+      return c.json({ error: 'Newsletter not found' }, 404)
+    }
+
+    const subscriberCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) as count FROM Subscriber WHERE newsletter_id = ?`
+    ).bind(newsletterId).first() || { count: 0 }
+
+    return c.json({ ...newsletter, subscriberCount: subscriberCount.count })
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+export default app
+```
+
+### 4. 使用 Zero Trust 验证保护 API
+
+在你的 Cloudflare Zero Trust 仪表盘上设置应用程序和访问策略，以确保访问 `/api/newsletter` 和 `/api/newsletter/{newsletterId}/offline` 路由时必须通过验证。
+
+完成这些步骤后，你的 API 应该能够正确运行，并且不会再遇到“Maximum call stack size exceeded”的错误。如果问题仍然存在，请进一步检查代码中可能引起递归调用的部分。
+
+> You
+
+确定是uuid库的问题，好像cloudflare worker需要特殊的方式来生成随机ID
+
+> ChatGPT
+
+确实，Cloudflare Workers 中的 `uuid` 库可能需要特殊处理，因为 Workers 环境并不支持 Node.js 的全部功能。你可以使用 Cloudflare Workers 特有的 API 来生成随机 ID，例如使用 `crypto` 模块生成随机值。下面是如何在 Cloudflare Workers 中生成 UUID 的示例代码：
+
+### 使用 `crypto` 模块生成 UUID
+
+可以使用 `crypto.getRandomValues()` 来生成随机数，并基于这些随机数来生成 UUID：
+
+```typescript
+function generateUUID() {
+  // Generate 16 bytes (128 bits) of random data
+  const randomValues = new Uint8Array(16);
+  crypto.getRandomValues(randomValues);
+
+  // Set the version to 4
+  randomValues[6] = (randomValues[6] & 0x0f) | 0x40;
+  randomValues[8] = (randomValues[8] & 0x3f) | 0x80;
+
+  const hexValues = Array.from(randomValues).map((byte) => {
+    return byte.toString(16).padStart(2, '0');
+  });
+
+  return `${hexValues[0]}${hexValues[1]}${hexValues[2]}${hexValues[3]}-${hexValues[4]}${hexValues[5]}-${hexValues[6]}${hexValues[7]}-${hexValues[8]}${hexValues[9]}-${hexValues[10]}${hexValues[11]}${hexValues[12]}${hexValues[13]}${hexValues[14]}${hexValues[15]}`;
+}
+```
+
+### 更新你的 Cloudflare Worker 代码
+
+在你的 Cloudflare Worker 代码中使用这个 `generateUUID` 函数代替 `uuid` 库。例如：
+
+```typescript
+import { Hono } from 'hono'
+
+type Bindings = {
+  DB: D1Database
+  EMAIL_SERVICE_URL: string
+  KV: KVNamespace
+}
+
+const app = new Hono<{ Bindings: Bindings }>()
+
+// 生成 UUID 的函数
+function generateUUID() {
+  const randomValues = new Uint8Array(16)
+  crypto.getRandomValues(randomValues)
+
+  randomValues[6] = (randomValues[6] & 0x0f) | 0x40
+  randomValues[8] = (randomValues[8] & 0x3f) | 0x80
+
+  const hexValues = Array.from(randomValues).map((byte) => {
+    return byte.toString(16).padStart(2, '0')
+  })
+
+  return `${hexValues[0]}${hexValues[1]}${hexValues[2]}${hexValues[3]}-${hexValues[4]}${hexValues[5]}-${hexValues[6]}${hexValues[7]}-${hexValues[8]}${hexValues[9]}-${hexValues[10]}${hexValues[11]}${hexValues[12]}${hexValues[13]}${hexValues[14]}${hexValues[15]}`
+}
+
+// 私有路由用于管理新闻通讯
+app.post('/api/newsletter', async (c) => {
+  const { title, description, logo } = await c.req.json<{ title: string, description: string, logo: string }>()
+  const id = generateUUID()
+  const createdAt = new Date().toISOString()
+  const updatedAt = createdAt
+
+  try {
+    await c.env.DB.prepare(
+      `INSERT INTO Newsletter (id, title, description, logo, subscribable, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(id, title, description, logo, true, createdAt, updatedAt).run()
+
+    return c.json({ id, title, description, logo, subscribable: true, createdAt, updatedAt }, 201)
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+app.put('/api/newsletter/:newsletterId/offline', async (c) => {
+  const { newsletterId } = c.req.param()
+
+  try {
+    await c.env.DB.prepare(
+      `UPDATE Newsletter SET subscribable = ? WHERE id = ?`
+    ).bind(false, newsletterId).run()
+
+    return c.json({ message: 'Newsletter taken offline successfully' })
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+// 公共路由用于管理订阅
+app.post('/api/subscribe/confirm', async (c) => {
+  const { email, token } = await c.req.json<{ email: string, token: string }>()
+
+  const storedToken = await c.env.KV.get(token)
+  if (!storedToken) {
+    return c.json({ error: 'Invalid or expired token' }, 400)
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE Subscriber SET isSubscribed = ? WHERE email = ?`
+  ).bind(true, email).run()
+
+  return c.json({ message: 'Subscription confirmed successfully' })
+})
+
+app.post('/api/subscribe/cancel', async (c) => {
+  const { email, token } = await c.req.json<{ email: string, token: string }>()
+
+  const storedToken = await c.env.KV.get(token)
+  if (!storedToken) {
+    return c.json({ error: 'Invalid or expired token' }, 400)
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE Subscriber SET isSubscribed = ? WHERE email = ?`
+  ).bind(false, email).run()
+
+  return c.json({ message: 'Unsubscribed successfully' })
+})
+
+app.post('/api/subscribe/send-confirmation', async (c) => {
+  const { email, newsletterId } = await c.req.json<{ email: string, newsletterId: string }>()
+  const token = generateUUID()
+  const expiry = 5 * 60 * 1000
+
+  await c.env.KV.put(token, email, { expirationTtl: expiry })
+
+  const confirmationUrl = `https://your-domain.com/api/subscribe/confirm?token=${token}&email=${email}`
+  await fetch(c.env.EMAIL_SERVICE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      to: email,
+      subject: 'Confirm your subscription',
+      body: `Please confirm your subscription by clicking the following link: ${confirmationUrl}`
+    })
+  })
+
+  return c.json({ message: 'Confirmation email sent' })
+})
+
+app.post('/api/subscribe/send-cancellation', async (c) => {
+  const { email, newsletterId } = await c.req.json<{ email: string, newsletterId: string }>()
+  const token = generateUUID()
+  const expiry = 5 * 60 * 1000
+
+  await c.env.KV.put(token, email, { expirationTtl: expiry })
+
+  const cancellationUrl = `https://your-domain.com/api/subscribe/cancel?token=${token}&email=${email}`
+  await fetch(c.env.EMAIL_SERVICE_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      to: email,
+      subject: 'Cancel your subscription',
+      body: `Please cancel your subscription by clicking the following link: ${cancellationUrl}`
+    })
+  })
+
+  return c.json({ message: 'Cancellation email sent' })
+})
+
+app.get('/newsletter/:newsletterId', async (c) => {
+  const { newsletterId } = c.req.param()
+
+  try {
+    const newsletter = await c.env.DB.prepare(
+      `SELECT * FROM Newsletter WHERE id = ?`
+    ).bind(newsletterId).first()
+
+    if (!newsletter) {
+      return c.json({ error: 'Newsletter not found' }, 404)
+    }
+
+    const subscriberCount = await c.env.DB.prepare(
+      `SELECT COUNT(*) as count FROM Subscriber WHERE newsletter_id = ?`
+    ).bind(newsletterId).first() || { count: 0 }
+
+    return c.json({ ...newsletter, subscriberCount: subscriberCount.count })
+  } catch (error: any) {
+    return c.json({ error: error.message }, 500)
+  }
+})
+
+export default app
+```
+
+这种方式使用 `crypto.getRandomValues()` 来生成随机字节，然后通过一系列位运算和字符串操作生成 UUID，确保在 Cloudflare Workers 环境中正确运行。
+
+> You
+
