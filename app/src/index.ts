@@ -47,15 +47,17 @@ app.get('/api/subscribe/confirm/:token', async (c) => {
   const { token } = c.req.param()
   
   // Validate Token and Get Email
-  const email = await c.env.KV.get(token)
-  if (!email) {
+  const tokenString = await c.env.KV.get(token) as string
+  const { email, newsletterId } = JSON.parse(tokenString)
+
+  if (!email || !newsletterId) {
     return c.json({ error: 'Invalid or expired token' }, 400)
   }
 
   // Update Subscription Status
   await c.env.DB.prepare(
-    `UPDATE Subscriber SET isSubscribed = ? WHERE email = ?`
-  ).bind(true, email).run()
+    `UPDATE Subscriber SET isSubscribed = ? WHERE email = ? AND newsletter_id = ?`
+  ).bind(true, email, newsletterId).run()
 
   return c.json({ message: 'Subscription confirmed successfully' })
 })
@@ -64,15 +66,17 @@ app.get('/api/subscribe/cancel/:token', async (c) => {
   const { token } = c.req.param()
 
   // Validate Token and Get Email
-  const email = await c.env.KV.get(token)
-  if (!email) {
+  const tokenString = await c.env.KV.get(token) as string
+  const { email, newsletterId } = JSON.parse(tokenString)
+
+  if (!email || !newsletterId) {
     return c.json({ error: 'Invalid or expired token' }, 400)
   }
 
   // Update Subscription Status
   await c.env.DB.prepare(
-    `UPDATE Subscriber SET isSubscribed = ? WHERE email = ?`
-  ).bind(false, email).run()
+    `UPDATE Subscriber SET isSubscribed = ? WHERE email = ? AND newsletter_id = ?`
+  ).bind(false, email, newsletterId).run()
 
   return c.json({ message: 'Unsubscribed successfully' })
 })
@@ -83,7 +87,7 @@ app.post('/api/subscribe/send-confirmation', async (c) => {
   const expiry = 5 * 60 * 1000 // 5 minutes
 
   // Store Token
-  await c.env.KV.put(token, email, { expirationTtl: expiry })
+  await c.env.KV.put(token, JSON.stringify({ email, newsletterId }), { expirationTtl: expiry })
 
   // Send Confirmation Email
   const confirmationUrl = `https://ld.i365.tech/api/subscribe/confirm?token=${token}`
@@ -91,9 +95,9 @@ app.post('/api/subscribe/send-confirmation', async (c) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      to: email,
+      mailTo: email,
       subject: 'Confirm your subscription',
-      body: `Please confirm your subscription by clicking the following link: ${confirmationUrl}`
+      txtMessage: `Please confirm your subscription by clicking the following link: ${confirmationUrl}`
     })
   })
 
@@ -106,7 +110,7 @@ app.post('/api/subscribe/send-cancellation', async (c) => {
   const expiry = 5 * 60 * 1000 // 5 minutes
 
   // Store Token
-  await c.env.KV.put(token, email, { expirationTtl: expiry })
+  await c.env.KV.put(token, JSON.stringify({ email, newsletterId }), { expirationTtl: expiry })
 
   // Send Cancellation Email
   const cancellationUrl = `https://your-domain.com/api/subscribe/cancel?token=${token}`
@@ -114,9 +118,9 @@ app.post('/api/subscribe/send-cancellation', async (c) => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      to: email,
+      mailTo: email,
       subject: 'Cancel your subscription',
-      body: `Please cancel your subscription by clicking the following link: ${cancellationUrl}`
+      txtMessage: `Please cancel your subscription by clicking the following link: ${cancellationUrl}`
     })
   })
 
