@@ -1,15 +1,17 @@
-import { Hono } from 'hono'
+import { Context, Hono } from 'hono'
 
 type Bindings = {
   DB: D1Database
-  NOTIFICATION: string
+  NOTIFICATION: Fetcher
   KV: KVNamespace
 }
+
+const NOTIFICATION_BASE_URL = 'http://my-invest-notification'
 
 const app = new Hono<{ Bindings: Bindings }>()
 
 // Private Routes for managing Newsletters
-app.post('/api/newsletter', async (c) => {
+app.post('/api/newsletter', async (c: Context) => {
   const { title, description, logo } = await c.req.json<{ title: string, description: string, logo: string }>()
 
   const id = crypto.randomUUID()
@@ -28,7 +30,7 @@ app.post('/api/newsletter', async (c) => {
   }
 })
 
-app.put('/api/newsletter/:newsletterId/offline', async (c) => {
+app.put('/api/newsletter/:newsletterId/offline', async (c: Context) => {
   const { newsletterId } = c.req.param()
 
   try {
@@ -43,30 +45,39 @@ app.put('/api/newsletter/:newsletterId/offline', async (c) => {
 })
 
 // Public Routes for managing Subscriptions
-app.get('/api/subscribe/confirm/:token', async (c) => {
+app.get('/api/subscribe/confirm/:token', async (c: Context) => {
   const { token } = c.req.param()
   
   // Validate Token and Get Email
   const tokenString = await c.env.KV.get(token) as string
+  if (!tokenString) {
+    return c.json({ error: 'Invalid or expired token' }, 400)
+  }
+
   const { email, newsletterId } = JSON.parse(tokenString)
 
   if (!email || !newsletterId) {
     return c.json({ error: 'Invalid or expired token' }, 400)
   }
 
-  // Update Subscription Status
+  // Upsert Subscription
   await c.env.DB.prepare(
-    `UPDATE Subscriber SET isSubscribed = ? WHERE email = ? AND newsletter_id = ?`
-  ).bind(true, email, newsletterId).run()
+    `INSERT INTO Subscriber (email, newsletter_id, isSubscribed) VALUES (?, ?, ?)
+     ON CONFLICT(email, newsletter_id) DO UPDATE SET isSubscribed = ?`
+  ).bind(email, newsletterId, true, true).run()
 
   return c.json({ message: 'Subscription confirmed successfully' })
 })
 
-app.get('/api/subscribe/cancel/:token', async (c) => {
+app.get('/api/subscribe/cancel/:token', async (c: Context) => {
   const { token } = c.req.param()
 
   // Validate Token and Get Email
   const tokenString = await c.env.KV.get(token) as string
+  if (!tokenString) {
+    return c.json({ error: 'Invalid or expired token' }, 400)
+  }
+
   const { email, newsletterId } = JSON.parse(tokenString)
 
   if (!email || !newsletterId) {
@@ -81,7 +92,7 @@ app.get('/api/subscribe/cancel/:token', async (c) => {
   return c.json({ message: 'Unsubscribed successfully' })
 })
 
-app.post('/api/subscribe/send-confirmation', async (c) => {
+app.post('/api/subscribe/send-confirmation', async (c: Context) => {
   const { email, newsletterId } = await c.req.json<{ email: string, newsletterId: string }>()
   const token = crypto.randomUUID()
   const expiry = 5 * 60 * 1000 // 5 minutes
@@ -90,21 +101,14 @@ app.post('/api/subscribe/send-confirmation', async (c) => {
   await c.env.KV.put(token, JSON.stringify({ email, newsletterId }), { expirationTtl: expiry })
 
   // Send Confirmation Email
-  const confirmationUrl = `https://ld.i365.tech/api/subscribe/confirm?token=${token}`
-  await fetch(c.env.NOTIFICATION, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      mailTo: email,
-      subject: 'Confirm your subscription',
-      txtMessage: `Please confirm your subscription by clicking the following link: ${confirmationUrl}`
-    })
-  })
+  const confirmationUrl = `https://ld.i365.tech/api/subscribe/confirm/${token}`
+
+  await sendEmail(c, email, 'Confirm your subscription', `Please confirm your subscription by clicking the following link: ${confirmationUrl}`)
 
   return c.json({ message: 'Confirmation email sent' })
 })
 
-app.post('/api/subscribe/send-cancellation', async (c) => {
+app.post('/api/subscribe/send-cancellation', async (c: Context) => {
   const { email, newsletterId } = await c.req.json<{ email: string, newsletterId: string }>()
   const token = crypto.randomUUID()
   const expiry = 5 * 60 * 1000 // 5 minutes
@@ -113,19 +117,28 @@ app.post('/api/subscribe/send-cancellation', async (c) => {
   await c.env.KV.put(token, JSON.stringify({ email, newsletterId }), { expirationTtl: expiry })
 
   // Send Cancellation Email
-  const cancellationUrl = `https://your-domain.com/api/subscribe/cancel?token=${token}`
-  await fetch(c.env.NOTIFICATION, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      mailTo: email,
-      subject: 'Cancel your subscription',
-      txtMessage: `Please cancel your subscription by clicking the following link: ${cancellationUrl}`
-    })
-  })
+  const cancellationUrl = `https://ld.i365.tech/api/subscribe/cancel/${token}`
+
+  await sendEmail(c, email, 'Cancel your subscription', `Please cancel your subscription by clicking the following link: ${cancellationUrl}`)
 
   return c.json({ message: 'Cancellation email sent' })
 })
+
+const sendEmail = async (c: Context, email: string, subject: string, txt: string) => {
+  const res = await c.env.NOTIFICATION.fetch(
+    new Request(`${NOTIFICATION_BASE_URL}/send_email`, {
+      method: 'POST',
+      body: JSON.stringify({ mail_to: email, subject, txt }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  );
+
+  const { message } = await res.json();
+
+  if (message !== 'success') {
+    console.error(`[send email failed for ${email}`);
+  }
+}
 
 // Public Page for viewing Newsletters
 // TODO: Change it to render a view instead of JSON
@@ -142,8 +155,8 @@ app.get('/newsletter/:newsletterId', async (c) => {
     }
 
     const subscriberCount = await c.env.DB.prepare(
-      `SELECT COUNT(*) as count FROM Subscriber WHERE newsletter_id = ?`
-    ).bind(newsletterId).first() || { count: 0 }
+      `SELECT COUNT(*) as count FROM Subscriber WHERE newsletter_id = ? AND isSubscribed = ?`
+    ).bind(newsletterId, true).first() || { count: 0 }
 
     return c.json({ ...newsletter, subscriberCount: subscriberCount.count })
   } catch (error: any) {
