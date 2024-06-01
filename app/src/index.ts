@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { v4 as uuidv4 } from 'uuid'
+import { uuid as uuidv4 } from 'uuidv4'
 
 type Bindings = {
   DB: D1Database
