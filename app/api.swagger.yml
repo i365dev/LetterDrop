@@ -22,6 +22,8 @@ paths:
           description: Newsletter created successfully
           schema:
             $ref: '#/definitions/Newsletter'
+        '500':
+          description: Server error
 
   /api/newsletter/{newsletterId}/offline:
     put:
@@ -37,11 +39,13 @@ paths:
       responses:
         '200':
           description: Newsletter taken offline successfully
+        '500':
+          description: Server error
 
   /api/subscribe/confirm:
     post:
       summary: Confirm subscription
-      description: Send a confirmation subscription link with a temporary token to the user's email
+      description: Confirm a subscription using the provided token
       parameters:
         - in: body
           name: body
@@ -50,12 +54,16 @@ paths:
             $ref: '#/definitions/SubscribeConfirmRequest'
       responses:
         '200':
-          description: Confirmation link sent successfully
+          description: Subscription confirmed successfully
+        '400':
+          description: Invalid or expired token
+        '500':
+          description: Server error
 
   /api/subscribe/cancel:
     post:
       summary: Cancel subscription
-      description: Send an unsubscribe link with a temporary token to the user's email
+      description: Cancel a subscription using the provided token
       parameters:
         - in: body
           name: body
@@ -64,12 +72,48 @@ paths:
             $ref: '#/definitions/SubscribeCancelRequest'
       responses:
         '200':
-          description: Unsubscribe link sent successfully
+          description: Unsubscribed successfully
+        '400':
+          description: Invalid or expired token
+        '500':
+          description: Server error
+
+  /api/subscribe/send-confirmation:
+    post:
+      summary: Send confirmation email
+      description: Send a confirmation email with a temporary token
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/SendConfirmationRequest'
+      responses:
+        '200':
+          description: Confirmation email sent successfully
+        '500':
+          description: Server error
+
+  /api/subscribe/send-cancellation:
+    post:
+      summary: Send cancellation email
+      description: Send a cancellation email with a temporary token
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/SendCancellationRequest'
+      responses:
+        '200':
+          description: Cancellation email sent successfully
+        '500':
+          description: Server error
 
   /newsletter/{newsletterId}:
     get:
       summary: Get newsletter details
-      description: View newsletter details and subscribe/unsubscribe
+      description: View newsletter details
       parameters:
         - name: newsletterId
           in: path
@@ -80,6 +124,10 @@ paths:
           description: Newsletter details retrieved successfully
           schema:
             $ref: '#/definitions/Newsletter'
+        '404':
+          description: Newsletter not found
+        '500':
+          description: Server error
 
 definitions:
   CreateNewsletterRequest:
@@ -106,6 +154,22 @@ definitions:
       email:
         type: string
       token:
+        type: string
+
+  SendConfirmationRequest:
+    type: object
+    properties:
+      email:
+        type: string
+      newsletterId:
+        type: string
+
+  SendCancellationRequest:
+    type: object
+    properties:
+      email:
+        type: string
+      newsletterId:
         type: string
 
   Newsletter:

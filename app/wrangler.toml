@@ -4,18 +4,22 @@ compatibility_date = "2023-12-01"
 # [vars]
 # MY_VAR = "my-variable"
 
-# [[kv_namespaces]]
-# binding = "MY_KV_NAMESPACE"
-# id = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+services = [
+  { binding = "NOTIFICATION", service = "my-invest-notification", environment = "production" }
+]
+
+[[kv_namespaces]]
+binding = "KV"
+id = "58ce70465f394f369376c6a3af439d77"
 
 # [[r2_buckets]]
 # binding = "MY_BUCKET"
 # bucket_name = "my-bucket"
 
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "my-database"
-# database_id = ""
+[[d1_databases]]
+binding = "DB"
+database_name = "i365-letter-drop-prod"
+database_id = "7ba535ae-d6c7-4570-854d-2483970acd10"
 
 # [ai]
 # binding = "AI"
