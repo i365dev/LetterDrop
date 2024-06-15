@@ -13,9 +13,9 @@ services = [
 binding = "KV"
 id = "58ce70465f394f369376c6a3af439d77"
 
-# [[r2_buckets]]
-# binding = "MY_BUCKET"
-# bucket_name = "my-bucket"
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "i365-letter-drop"
 
 [[d1_databases]]
 binding = "DB"

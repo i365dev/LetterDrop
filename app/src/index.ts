@@ -4,6 +4,7 @@ type Bindings = {
   DB: D1Database
   NOTIFICATION: Fetcher
   KV: KVNamespace
+  R2: R2Bucket
 }
 
 const NOTIFICATION_BASE_URL = 'http://my-invest-notification'
@@ -18,6 +19,8 @@ app.post('/api/newsletter', async (c: Context) => {
 
   const createdAt = new Date().toISOString()
   const updatedAt = createdAt
+
+  await c.env.R2.put(`${id}/index.md`, `# ${title}\n\n${description}`)
 
   try {
     await c.env.DB.prepare(
@@ -431,5 +434,9 @@ app.get('/newsletter/:newsletterId', async (c) => {
 })
 
 // TODO: Admin send newsletter to subscribers
+// 1.a Admin -> Put MD file in R2 directory -> Call API to send newsletter to subscribers
+// 1.b Admin -> Put MD file in R2 directory -> CF worker scheduled to check the new file and send newsletter to subscribers
+// 2. MD file + styles -> HTML -> Email -> Subscribers
+// 3. API to send email to subscribers -> CF queue -> CF worker consume queue and send email
 
 export default app
