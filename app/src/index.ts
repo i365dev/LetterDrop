@@ -141,7 +141,6 @@ const sendEmail = async (c: Context, email: string, subject: string, txt: string
 }
 
 // Public Page for viewing Newsletters
-// TODO: Change it to render a view instead of JSON
 app.get('/newsletter/:newsletterId', async (c) => {
   const { newsletterId } = c.req.param()
 
@@ -151,16 +150,283 @@ app.get('/newsletter/:newsletterId', async (c) => {
     ).bind(newsletterId).first()
 
     if (!newsletter) {
-      return c.json({ error: 'Newsletter not found' }, 404)
+      return c.html('<h1>Newsletter not found</h1>', 404)
+    }
+
+    if (!newsletter.subscribable) {
+      return c.html('<h1>Newsletter is not subscribable</h1>', 404)
     }
 
     const subscriberCount = await c.env.DB.prepare(
-      `SELECT COUNT(*) as count FROM Subscriber WHERE newsletter_id = ? AND isSubscribed = ?`
-    ).bind(newsletterId, true).first() || { count: 0 }
+      `SELECT COUNT(*) as count FROM Subscriber WHERE newsletter_id = ? and isSubscribed = ?`
+    ).bind(newsletterId, 1).first() || { count: 0 }
 
-    return c.json({ ...newsletter, subscriberCount: subscriberCount.count })
+    // 获取用户语言
+    const language = c.req.header('Accept-Language')?.startsWith('zh') ? 'zh' : 'en'
+
+    const html = language === 'zh' ? `
+      <html>
+        <head>
+          <title>${newsletter.title}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 0;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              background-color: #f4f4f4;
+            }
+            .container {
+              background: white;
+              padding: 20px;
+              border-radius: 10px;
+              box-shadow: 0 0 10px rgba(0,0,0,0.1);
+              text-align: center;
+              width: 90%;
+              max-width: 600px;
+            }
+            img {
+              max-width: 100%;
+              height: auto;
+            }
+            h1 {
+              margin: 20px 0;
+            }
+            p {
+              font-size: 16px;
+              color: #333;
+            }
+            .input-container {
+              margin: 20px 0;
+            }
+            input[type="email"] {
+              padding: 10px;
+              font-size: 16px;
+              width: 80%;
+              max-width: 400px;
+              border: 1px solid #ccc;
+              border-radius: 5px;
+            }
+            .button {
+              display: inline-block;
+              margin: 10px 5px;
+              padding: 10px 20px;
+              font-size: 16px;
+              color: white;
+              background-color: #007BFF;
+              border: none;
+              border-radius: 5px;
+              text-decoration: none;
+              cursor: pointer;
+            }
+            .button.cancel {
+              background-color: #dc3545;
+            }
+            .message {
+              margin-top: 20px;
+              font-size: 16px;
+              color: green;
+            }
+            .error {
+              margin-top: 20px;
+              font-size: 16px;
+              color: red;
+            }
+          </style>
+          <script>
+            function validateEmail(email) {
+              const re = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/
+              return re.test(email)
+            }
+
+            async function handleSubscribe(action) {
+              const email = document.getElementById('email').value
+              const messageElement = document.getElementById('message')
+              const errorElement = document.getElementById('error')
+              
+              messageElement.textContent = ''
+              errorElement.textContent = ''
+              
+              if (!email || !validateEmail(email)) {
+                errorElement.textContent = '请输入有效的邮箱地址。'
+                return
+              }
+
+              try {
+                const response = await fetch(\`/api/subscribe/\${action}\`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ email, newsletterId: '${newsletterId}' })
+                })
+
+                if (response.ok) {
+                  messageElement.textContent = '操作成功，请检查您的邮箱。'
+                } else {
+                  const result = await response.json()
+                  errorElement.textContent = result.error || '操作失败，请重试。'
+                }
+              } catch (error) {
+                errorElement.textContent = '请求失败，请检查您的网络连接。'
+              }
+            }
+          </script>
+        </head>
+        <body>
+          <div class="container">
+            <img src="${newsletter.logo}" alt="${newsletter.title} Logo" />
+            <h1>${newsletter.title}</h1>
+            <p>${newsletter.description}</p>
+            <p>订阅者: ${subscriberCount.count}</p>
+            <div class="input-container">
+              <input type="email" id="email" placeholder="请输入您的邮箱地址" />
+            </div>
+            <button class="button" onclick="handleSubscribe('send-confirmation')">订阅</button>
+            <button class="button cancel" onclick="handleSubscribe('send-cancellation')">取消订阅</button>
+            <p id="message" class="message"></p>
+            <p id="error" class="error"></p>
+          </div>
+        </body>
+      </html>
+    ` : `
+      <html>
+        <head>
+          <title>${newsletter.title}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 0;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              background-color: #f4f4f4;
+            }
+            .container {
+              background: white;
+              padding: 20px;
+              border-radius: 10px;
+              box-shadow: 0 0 10px rgba(0,0,0,0.1);
+              text-align: center;
+              width: 90%;
+              max-width: 600px;
+            }
+            img {
+              max-width: 100%;
+              height: auto;
+            }
+            h1 {
+              margin: 20px 0;
+            }
+            p {
+              font-size: 16px;
+              color: #333;
+            }
+            .input-container {
+              margin: 20px 0;
+            }
+            input[type="email"] {
+              padding: 10px;
+              font-size: 16px;
+              width: 80%;
+              max-width: 400px;
+              border: 1px solid #ccc;
+              border-radius: 5px;
+            }
+            .button {
+              display: inline-block;
+              margin: 10px 5px;
+              padding: 10px 20px;
+              font-size: 16px;
+              color: white;
+              background-color: #007BFF;
+              border: none;
+              border-radius: 5px;
+              text-decoration: none;
+              cursor: pointer;
+            }
+            .button.cancel {
+              background-color: #dc3545;
+            }
+            .message {
+              margin-top: 20px;
+              font-size: 16px;
+              color: green;
+            }
+            .error {
+              margin-top: 20px;
+              font-size: 16px;
+              color: red;
+            }
+          </style>
+          <script>
+            function validateEmail(email) {
+              const re = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/
+              return re.test(email)
+            }
+
+            async function handleSubscribe(action) {
+              const email = document.getElementById('email').value
+              const messageElement = document.getElementById('message')
+              const errorElement = document.getElementById('error')
+              
+              messageElement.textContent = ''
+              errorElement.textContent = ''
+              
+              if (!email || !validateEmail(email)) {
+                errorElement.textContent = 'Please enter a valid email address.'
+                return
+              }
+
+              try {
+                const response = await fetch(\`/api/subscribe/\${action}\`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({ email, newsletterId: '${newsletterId}' })
+                })
+
+                if (response.ok) {
+                  messageElement.textContent = 'Operation successful, please check your email.'
+                } else {
+                  const result = await response.json()
+                  errorElement.textContent = result.error || 'Operation failed, please try again.'
+                }
+              } catch (error) {
+                errorElement.textContent = 'Request failed, please check your network connection.'
+              }
+            }
+          </script>
+        </head>
+        <body>
+          <div class="container">
+            <img src="${newsletter.logo}" alt="${newsletter.title} Logo" />
+            <h1>${newsletter.title}</h1>
+            <p>${newsletter.description}</p>
+            <p>Subscribers: ${subscriberCount.count}</p>
+            <div class="input-container">
+              <input type="email" id="email" placeholder="Enter your email address" />
+            </div>
+            <button class="button" onclick="handleSubscribe('send-confirmation')">Subscribe</button>
+            <button class="button cancel" onclick="handleSubscribe('send-cancellation')">Unsubscribe</button>
+            <p id="message" class="message"></p>
+            <p id="error" class="error"></p>
+          </div>
+        </body>
+      </html>
+    `
+
+    return c.html(html)
   } catch (error: any) {
-    return c.json({ error: error.message }, 500)
+    return c.html(`<h1>${error.message}</h1>`, 500)
   }
 })
 
