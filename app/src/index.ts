@@ -1,11 +1,14 @@
 import { Context, Hono } from 'hono'
+import PostalMime from "postal-mime";
 
 type Bindings = {
-  DB: D1Database
+	DB: D1Database
   NOTIFICATION: Fetcher
   KV: KVNamespace
   R2: R2Bucket
-}
+  QUEUE: Queue
+	ALLOWED_EMAILS: string;
+};
 
 const NOTIFICATION_BASE_URL = 'http://my-invest-notification'
 
@@ -106,7 +109,7 @@ app.post('/api/subscribe/send-confirmation', async (c: Context) => {
   // Send Confirmation Email
   const confirmationUrl = `https://ld.i365.tech/api/subscribe/confirm/${token}`
 
-  await sendEmail(c, email, 'Confirm your subscription', `Please confirm your subscription by clicking the following link: ${confirmationUrl}`)
+  await sendEmail(c.env, email, 'Confirm your subscription', `Please confirm your subscription by clicking the following link: ${confirmationUrl}`)
 
   return c.json({ message: 'Confirmation email sent' })
 })
@@ -122,21 +125,21 @@ app.post('/api/subscribe/send-cancellation', async (c: Context) => {
   // Send Cancellation Email
   const cancellationUrl = `https://ld.i365.tech/api/subscribe/cancel/${token}`
 
-  await sendEmail(c, email, 'Cancel your subscription', `Please cancel your subscription by clicking the following link: ${cancellationUrl}`)
+  await sendEmail(c.env, email, 'Cancel your subscription', `Please cancel your subscription by clicking the following link: ${cancellationUrl}`)
 
   return c.json({ message: 'Cancellation email sent' })
 })
 
-const sendEmail = async (c: Context, email: string, subject: string, txt: string) => {
-  const res = await c.env.NOTIFICATION.fetch(
+const sendEmail = async (env: Bindings, email: string, subject: string, txt: string, html: string = '') => {
+  const res = await env.NOTIFICATION.fetch(
     new Request(`${NOTIFICATION_BASE_URL}/send_email`, {
       method: 'POST',
-      body: JSON.stringify({ mail_to: email, subject, txt }),
+      body: JSON.stringify({ mail_to: email, subject, txt, html }),
       headers: { 'Content-Type': 'application/json' },
     })
   );
 
-  const { message } = await res.json();
+  const { message } = await res.json() as { message: string };
 
   if (message !== 'success') {
     console.error(`[send email failed for ${email}`);
@@ -433,10 +436,87 @@ app.get('/newsletter/:newsletterId', async (c) => {
   }
 })
 
-// TODO: Admin send newsletter to subscribers
-// 1.a Admin -> Put MD file in R2 directory -> Call API to send newsletter to subscribers
-// 1.b Admin -> Put MD file in R2 directory -> CF worker scheduled to check the new file and send newsletter to subscribers
-// 2. MD file + styles -> HTML -> Email -> Subscribers
-// 3. API to send email to subscribers -> CF queue -> CF worker consume queue and send email
+const streamToArrayBuffer = async function(stream: ReadableStream, streamSize: number) {
+  let result = new Uint8Array(streamSize);
+  let bytesRead = 0;
+  const reader = stream.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    result.set(value, bytesRead);
+    bytesRead += value.length;
+  }
+  return result;
+}
 
-export default app
+async function getSubscribers(newsletterId: string, db: D1Database): Promise<{ email: string }[]> {
+  const { results } = await db.prepare(`SELECT email FROM Subscriber WHERE newsletter_id = ? AND isSubscribed = true`).bind(newsletterId).all();
+  return results as { email: string }[];
+}
+
+export default {
+  fetch: app.fetch,
+  async email(message: ForwardableEmailMessage, env: Bindings, ctx: ExecutionContext) {
+    const allowedEmails = env.ALLOWED_EMAILS.split(',');
+
+    if (allowedEmails.indexOf(message.from) === -1) {
+      message.setReject("Address not allowed");
+      return;
+    }
+
+    const subject = message.headers.get('subject') ?? '';
+    const newsletterIdMatch = subject.match(/\[Newsletter-ID:(\d+)\]/);
+    const newsletterId = newsletterIdMatch ? newsletterIdMatch[1] : null;
+
+    const realSubject = subject.replace(/\[Newsletter-ID:\d+\]/, '').trim();
+
+    if (!newsletterId) {
+      message.setReject("No Newsletter ID found in subject");
+      return;
+    }
+
+    const rawEmail = await streamToArrayBuffer(message.raw, message.rawSize);
+    const parser = new PostalMime();
+    const parsedEmail = await parser.parse(rawEmail);
+    if (!parsedEmail.html || !parsedEmail.text) {
+			console.error(`Can not parse email`);
+			return;
+		}
+
+    const fileName = `newsletters/${newsletterId}/${Date.now()}.html`;
+
+    await env.R2.put(fileName, parsedEmail.html);
+
+    const subscribers = await getSubscribers(newsletterId, env.DB);
+
+    for (const subscriber of subscribers) {
+      await env.QUEUE.send({
+        email: subscriber.email,
+        newsletterId,
+        realSubject,
+        fileName
+      });
+    }
+  },
+  async queue(batch: MessageBatch<{ email: string, newsletterId: string, subject: string, fileName: string }>, env: Bindings): Promise<void> {
+    for (const message of batch.messages) {
+      const { email, subject, newsletterId, fileName } = message.body;
+
+      console.log(`Sending email to ${email} for newsletter ${newsletterId}`);
+
+      try {
+        const object = await env.R2.get(fileName);
+        if (!object) throw new Error('Failed to get HTML content from R2');
+
+        const htmlContent = await object.text();
+
+        await sendEmail(env, email, subject, '', htmlContent);
+        console.log(`Email sent to ${email}`);
+      } catch (error) {
+        console.error(`Failed to send email to ${email}:`, error);
+      }
+    }
+  }
+}
