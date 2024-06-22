@@ -439,7 +439,7 @@ app.get('/newsletter/:newsletterId', async (c) => {
 // Common Functions
 
 function renderHtml(c: Context, englishMessage: string, chineseMessage: string) {
-  const language = c.req.header('accept-language')?.includes('zh') ? 'zh' : 'en';
+  const language = c.req.header('Accept-Language')?.startsWith('zh') ? 'zh' : 'en';
   const message = language === 'zh' ? chineseMessage : englishMessage;
 
   const html = `
