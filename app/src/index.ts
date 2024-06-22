@@ -23,7 +23,7 @@ app.post('/api/newsletter', async (c: Context) => {
   const createdAt = new Date().toISOString()
   const updatedAt = createdAt
 
-  await c.env.R2.put(`${id}/index.md`, `# ${title}\n\n${description}`)
+  await c.env.R2.put(`newsletters/${id}/index.md`, `# ${title}\n\n${description}`)
 
   try {
     await c.env.DB.prepare(
@@ -467,10 +467,13 @@ export default {
     }
 
     const subject = message.headers.get('subject') ?? '';
-    const newsletterIdMatch = subject.match(/\[Newsletter-ID:(\d+)\]/);
+
+    console.log(`Processing email with subject: ${subject}`);
+    
+    const newsletterIdMatch = subject.match(/\[Newsletter-ID:([a-f0-9-]{36})\]/);
     const newsletterId = newsletterIdMatch ? newsletterIdMatch[1] : null;
 
-    const realSubject = subject.replace(/\[Newsletter-ID:\d+\]/, '').trim();
+    const realSubject = subject.replace(/\[Newsletter-ID:[a-f0-9-]{36}\]/, '').trim();
 
     if (!newsletterId) {
       message.setReject("No Newsletter ID found in subject");
@@ -495,7 +498,7 @@ export default {
       await env.QUEUE.send({
         email: subscriber.email,
         newsletterId,
-        realSubject,
+        subject: realSubject,
         fileName
       });
     }
