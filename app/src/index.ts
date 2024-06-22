@@ -72,7 +72,7 @@ app.get('/api/subscribe/confirm/:token', async (c: Context) => {
      ON CONFLICT(email, newsletter_id) DO UPDATE SET isSubscribed = ?`
   ).bind(email, newsletterId, true, true).run()
 
-  return c.json({ message: 'Subscription confirmed successfully' })
+  return renderHtml(c, 'Subscription confirmed successfully', '订阅成功确认');
 })
 
 app.get('/api/subscribe/cancel/:token', async (c: Context) => {
@@ -95,7 +95,7 @@ app.get('/api/subscribe/cancel/:token', async (c: Context) => {
     `UPDATE Subscriber SET isSubscribed = ? WHERE email = ? AND newsletter_id = ?`
   ).bind(false, email, newsletterId).run()
 
-  return c.json({ message: 'Unsubscribed successfully' })
+  return renderHtml(c, 'Unsubscribed successfully', '取消订阅成功');
 })
 
 app.post('/api/subscribe/send-confirmation', async (c: Context) => {
@@ -435,6 +435,29 @@ app.get('/newsletter/:newsletterId', async (c) => {
     return c.html(`<h1>${error.message}</h1>`, 500)
   }
 })
+
+// Common Functions
+
+function renderHtml(c: Context, englishMessage: string, chineseMessage: string) {
+  const language = c.req.header('accept-language')?.includes('zh') ? 'zh' : 'en';
+  const message = language === 'zh' ? chineseMessage : englishMessage;
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="${language}">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${message}</title>
+      </head>
+      <body>
+        <h1>${message}</h1>
+      </body>
+    </html>
+  `;
+
+  return c.html(html);
+}
 
 const streamToArrayBuffer = async function(stream: ReadableStream, streamSize: number) {
   let result = new Uint8Array(streamSize);
