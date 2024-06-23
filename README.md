@@ -2,6 +2,10 @@
 
 LetterDrop is a secure and efficient newsletter management service powered by Cloudflare Workers, enabling easy creation, distribution, and subscription management of newsletters.
 
+## The story behind LetterDrop
+
+I have been using `TinyLetter` to send newsletters to my subscribers, but unfortunately, Mailchimp has now shut down this free service. This isn't the first time I've faced such an issue, whenever this happens, I lose all my subscribers and have to look for a new way to send newsletters. To avoid this recurring problem, I've decided to build my own free newsletter service. It needs to be zero-cost, easy to use, and reliable so it won't get shut down. To achieve this, I'm using Cloudflare Workers to create the service, which I've named LetterDrop.
+
 ## How to use?
 
 ### Create a newsletter
