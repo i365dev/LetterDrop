@@ -87,6 +87,11 @@ LetterDrop uses the Cloudflare Queues to handle the failed emails. You can use t
 
 The next step is to add more features to LetterDrop.
 
+- Improvments
+  - [ ] Add the unit tests.
+  - [ ] Add the email template.
+  - [ ] Track the email open rate.
+  - [ ] Support more third-party email services like SendGrid, Mailgun, etc.
 - [ ] Support the mulit-tenant feature.
 - [ ] Add the landing page.
 
