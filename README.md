@@ -44,6 +44,19 @@ To use LetterDrop, you need to create a Cloudflare account and deploy the Worker
 
 __NOTE:__ You need to change the `app/wrangler.toml` file to use your config values.
 
+### The dependencies
+
+- [Cloudflare Workers](https://workers.cloudflare.com/)
+- [Cloudflare Email Worker](https://developers.cloudflare.com/email-routing/email-workers/)
+- [Cloudflare KV](https://developers.cloudflare.com/kv/)
+- [Cloudflare R2](https://developers.cloudflare.com/r2/)
+- [Cloudflare D1](https://developers.cloudflare.com/d1)
+  - Please refer to the [app/db/README.md](app/db/README.md) file to create the database.
+
+### Variables
+
+- `ALLOWED_EMAILS`: The list of allowed emails to create newsletters.
+
 ### How to setup the notification service?
 
 Currently LetterDrop uses [AWS SES](https://aws.amazon.com/ses/) to send emails. You need to create an AWS account and configure SES to send emails. After that, you need to create a Cloudflare Worker as a notification service. The code is very simple, you can use the ChatGPT to generate the code.
@@ -57,4 +70,4 @@ The next step is to add more features to LetterDrop.
 
 ## How to contribute?
 
-All codes are written by GPT-4o, and the prompts are stored in this [CDDR](docs/CDDR//app.md) file.
+All codes are written by GPT-4o, and the prompts are stored in this [CDDR](docs/CDDR//app.md) file. And I also recorded the [video](https://www.youtube.com/playlist?list=PL21oMWN6Y7PCqSwbwesD4_wmXEVSeeQ7h) to show how to create the LetterDrop project.
