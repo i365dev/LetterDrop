@@ -103,6 +103,6 @@ That also means you can easily customize the code by changing the prompts. You c
 
 Even I use the GPT model to generate the code, I still need to review the code and test it. So if you find any issues or have any suggestions, please feel free to create an issue or pull request. And there is no restriction on the contribution, you can contribute to any part of the project by yourself or with the help of the GPT model.
 
-## Disscussion
+## Discussion
 
 If you have any questions or suggestions, please feel free to create an issue or pull request. I'm happy to discuss with you. Or you can discuss it in this hacker news [thread](https://news.ycombinator.com/item?id=40764579).
