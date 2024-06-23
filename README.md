@@ -60,9 +60,10 @@ __NOTE:__ You need to change the `app/wrangler.toml` file to use your config val
 ### The dependencies
 
 - [Cloudflare Workers](https://workers.cloudflare.com/)
-- [Cloudflare Email Worker](https://developers.cloudflare.com/email-routing/email-workers/)
+- [Cloudflare Email Workers](https://developers.cloudflare.com/email-routing/email-workers/)
 - [Cloudflare KV](https://developers.cloudflare.com/kv/)
 - [Cloudflare R2](https://developers.cloudflare.com/r2/)
+- [Cloudflare Queues](https://developers.cloudflare.com/queues/#cloudflare-queues/)
 - [Cloudflare D1](https://developers.cloudflare.com/d1)
   - Please refer to the [app/db/README.md](app/db/README.md) file to create the database.
 
@@ -73,6 +74,10 @@ __NOTE:__ You need to change the `app/wrangler.toml` file to use your config val
 ### How to setup the notification service?
 
 Currently LetterDrop uses [AWS SES](https://aws.amazon.com/ses/) to send emails. You need to create an AWS account and configure SES to send emails. After that, you need to create a Cloudflare Worker as a notification service. The code is very simple, you can use the ChatGPT to generate the code.
+
+### How to handle the failed emails?
+
+LetterDrop uses the Cloudflare Queues to handle the failed emails. You can use the Cloudflare dashboard to monitor the failed emails and replay them in the dead-letter queue.
 
 ## What is the next step?
 
