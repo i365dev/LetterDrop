@@ -48,6 +48,13 @@ __NOTE:__ You need to change the `app/wrangler.toml` file to use your config val
 
 Currently LetterDrop uses [AWS SES](https://aws.amazon.com/ses/) to send emails. You need to create an AWS account and configure SES to send emails. After that, you need to create a Cloudflare Worker as a notification service. The code is very simple, you can use the ChatGPT to generate the code.
 
+## What is the next step?
+
+The next step is to add more features to LetterDrop.
+
+- [ ] Support the mulit-tenant feature.
+- [ ] Add the landing page.
+
 ## How to contribute?
 
 All codes are written by GPT-4o, and the prompts are stored in this [CDDR](docs/CDDR//app.md) file.
