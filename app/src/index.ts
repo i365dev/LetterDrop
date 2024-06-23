@@ -2,12 +2,12 @@ import { Context, Hono } from 'hono'
 import PostalMime from "postal-mime";
 
 type Bindings = {
-	DB: D1Database
+  DB: D1Database
   NOTIFICATION: Fetcher
   KV: KVNamespace
   R2: R2Bucket
   QUEUE: Queue
-	ALLOWED_EMAILS: string;
+  ALLOWED_EMAILS: string;
 };
 
 const NOTIFICATION_BASE_URL = 'http://my-invest-notification'
@@ -29,7 +29,7 @@ app.post('/api/newsletter', async (c: Context) => {
     await c.env.DB.prepare(
       `INSERT INTO Newsletter (id, title, description, logo, subscribable, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).bind(id, title, description, logo, true, createdAt, updatedAt).run()
-    
+
     return c.json({ id, title, description, logo, subscribable: true, createdAt, updatedAt }, 201)
   } catch (error: any) {
     return c.json({ error: error.message }, 500)
@@ -43,7 +43,7 @@ app.put('/api/newsletter/:newsletterId/offline', async (c: Context) => {
     await c.env.DB.prepare(
       `UPDATE Newsletter SET subscribable = ? WHERE id = ?`
     ).bind(false, newsletterId).run()
-    
+
     return c.json({ message: 'Newsletter taken offline successfully' })
   } catch (error: any) {
     return c.json({ error: error.message }, 500)
@@ -53,7 +53,7 @@ app.put('/api/newsletter/:newsletterId/offline', async (c: Context) => {
 // Public Routes for managing Subscriptions
 app.get('/api/subscribe/confirm/:token', async (c: Context) => {
   const { token } = c.req.param()
-  
+
   // Validate Token and Get Email
   const tokenString = await c.env.KV.get(token) as string
   if (!tokenString) {
@@ -459,7 +459,7 @@ function renderHtml(c: Context, englishMessage: string, chineseMessage: string) 
   return c.html(html);
 }
 
-const streamToArrayBuffer = async function(stream: ReadableStream, streamSize: number) {
+const streamToArrayBuffer = async function (stream: ReadableStream, streamSize: number) {
   let result = new Uint8Array(streamSize);
   let bytesRead = 0;
   const reader = stream.getReader();
@@ -492,7 +492,7 @@ export default {
     const subject = message.headers.get('subject') ?? '';
 
     console.log(`Processing email with subject: ${subject}`);
-    
+
     const newsletterIdMatch = subject.match(/\[Newsletter-ID:([a-f0-9-]{36})\]/);
     const newsletterId = newsletterIdMatch ? newsletterIdMatch[1] : null;
 
@@ -507,9 +507,9 @@ export default {
     const parser = new PostalMime();
     const parsedEmail = await parser.parse(rawEmail);
     if (!parsedEmail.html || !parsedEmail.text) {
-			console.error(`Can not parse email`);
-			return;
-		}
+      console.error(`Can not parse email`);
+      return;
+    }
 
     const fileName = `newsletters/${newsletterId}/${Date.now()}.html`;
 
